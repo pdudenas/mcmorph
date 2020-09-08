@@ -55,7 +55,7 @@ def fill_nan_localmean(array,nan_idx):
         array[pos[0],pos[1]] = local_mean
     return array
 
-def grow_complete(nucleated_array,growth_anisotropy=2,pi_mutate=np.deg2rad(5),c_mutate=np.deg2rad(5),time=0):
+def grow_complete(nucleated_array,growth_anisotropy=2,pi_mutate=np.deg2rad(5),c_mutate=np.deg2rad(5),time=0, debug=None):
     '''Takes nucleated array and grows crystal until the array is completely filled. 
         Uses a sobel gradient to find crystal edges for more efficient iterating (compared to interating over all not-nans)'''
     grow_array = nucleated_array.copy()
@@ -114,6 +114,8 @@ def grow_complete(nucleated_array,growth_anisotropy=2,pi_mutate=np.deg2rad(5),c_
             ## constrain orientation to +/- 90 degrees
             grow_array[grow_array > np.pi/2] %= -np.pi/2
             grow_array[grow_array < -np.pi/2] %= np.pi/2
+        if debug is not None and time == debug:
+            return grow_array
         time += 1
     return grow_array
 
