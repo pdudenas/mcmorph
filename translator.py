@@ -10,7 +10,7 @@ from skimage.transform import downscale_local_mean
 
 ### file loader(s) ###
 def load_npy(filename,downscale=1):
-    '''loads .npy files and extracts q and chi from filename. 
+    '''loads .npy files and extracts q and chi from filename.
         Based on Salleo group naming convention'''
     data = np.load(filename)
     # string parsing -- example of filename: '...ss=10nm 128x128...__q 0.50 3.00 0.02 a -90.00 90.00 2.00.npy'
@@ -20,7 +20,7 @@ def load_npy(filename,downscale=1):
         ss = float(filename[(ss_idx+2):(ss_idx+4)])
     else:
         ss = float(filename[(ss_idx+3):(ss_idx+5)])
-    qchi_string = filename.split('__')[1][:-4].split(' ') 
+    qchi_string = filename.split('__')[1][:-4].split(' ')
     qmin = float(qchi_string[1])
     qmax = float(qchi_string[2])
     qinc = float(qchi_string[3])
@@ -29,16 +29,16 @@ def load_npy(filename,downscale=1):
     chi_inc = float(qchi_string[7])
     q = np.arange(qmin, qmax, qinc*downscale)
     chi = np.arange(chi_min, chi_max, chi_inc*downscale)
-    
+
     #optionally downscale image by some integer factor
-    if downscale > 1: 
-        data = downscale_local_mean(data,(1,downscale,downscale)) 
+    if downscale > 1:
+        data = downscale_local_mean(data,(1,downscale,downscale))
     return ss, q, chi, data
 
 ### reconstruction ###
 def dark_field(ss, data):
     '''Reconstructs dark field and returns as an xarray DataArray'''
-    
+
     reshape_factor = int(np.sqrt(len(data)))
     x = y = np.arange(0,ss*reshape_factor,ss)
     df_data = np.sum(data,axis=(1,2))
@@ -57,12 +57,12 @@ def gauss_1(x,a,b,c,d):
     return a*np.exp(-(x-b)**2/c**2) + d
 
 def gauss_2(x, a1, b1, c1, a2, b2, c2, d):
-    return (a1*np.exp(-(x-b1)**2/c1**2) + 
+    return (a1*np.exp(-(x-b1)**2/c1**2) +
             a2*np.exp(-(x-b2)**2/c2**2) + d)
 
 def gauss_3(x, a1, b1, c1, a2, b2, c2, a3, b3, c3, d):
-    return (a1*np.exp(-(x-b1)**2/c1**2) + 
-            a2*np.exp(-(x-b2)**2/c2**2) + 
+    return (a1*np.exp(-(x-b1)**2/c1**2) +
+            a2*np.exp(-(x-b2)**2/c2**2) +
             a3*np.exp(-(x-b3)**2/c3**2) + d)
 
 
@@ -99,7 +99,7 @@ def subtract_powerlaw(q, data, qmin_exclude=1, qmax_exclude=2.2):
 
 
 def peak_finder(q, chi, data,qmin_exclude=1.5, qmax_exclude=2, prominence=10):
-    '''estimates how many gaussian peaks to fit 
+    '''estimates how many gaussian peaks to fit
         and initial guesses for their starting position in chi'''
     peaks = []
     num_peaks = np.zeros(len(data))
@@ -154,7 +154,7 @@ def fit_peaks(chi, data_1d, peaks, num_peaks):
         else:
             print('More than 3 peaks, adjust prominence value')
             gauss_params.append([])
-    
+
     return gauss_params
 
 def list_to_array(data_list):
@@ -196,10 +196,10 @@ def list_to_array(data_list):
 def implot(array_1d,**kwargs):
     reshape_val = int(np.sqrt(len(array_1d)))
     plt.imshow(np.reshape(array_1d,(reshape_val,reshape_val)),**kwargs)
-    
-    
 
-    
+
+
+
 ### HDF5 Writer ###
 
 def write_orientation_hdf5(orientation_array,PhysSize,fname,author='PJD',polymer='PBTTT'):
@@ -213,7 +213,7 @@ def write_orientation_hdf5(orientation_array,PhysSize,fname,author='PJD',polymer
     phi1 = 1 - np.sqrt(xvec**2+yvec**2)
     phi1_out = phi1[np.newaxis,:,:]
     phi2_out = np.zeros((1,NumXY,NumXY))
-    
+
     print(f'--> Marking {fname}')
     with h5py.File(fname,'w') as f:
             f.create_dataset("igor_parameters/igormaterialnum",data=2.0)
@@ -221,14 +221,14 @@ def write_orientation_hdf5(orientation_array,PhysSize,fname,author='PJD',polymer
             f.create_dataset("vector_morphology/Mat_2_alignment",data=s2,compression='gzip',compression_opts=9)
             f.create_dataset("vector_morphology/Mat_1_unaligned",data=phi1_out,compression='gzip',compression_opts=9)
             f.create_dataset("vector_morphology/Mat_2_unaligned",data=phi2_out,compression='gzip',compression_opts=9)
-        
+
             f.create_dataset('morphology_variables/creation_date', data=datetime.datetime.now().strftime("%m/%d/%Y, %H:%M:%S"))
             f.create_dataset('morphology_variables/film_normal', data=[1,0,0])
             f.create_dataset('morphology_variables/morphology_creator', data=author)
             f.create_dataset('morphology_variables/name', data=author)
             f.create_dataset('morphology_variables/version', data=datetime.datetime.now().strftime("%m/%d/%Y, %H:%M:%S"))
-            f.create_dataset('morphology_variables/voxel_size_nm', data=PhysSize) 
-        
+            f.create_dataset('morphology_variables/voxel_size_nm', data=PhysSize)
+
             f.create_dataset('igor_parameters/igorefield', data="0,1")
             f.create_dataset('igor_parameters/igormaterials', data=f"{polymer},vac")
             f.create_dataset('igor_parameters/igormodelname', data="4DSTEM")

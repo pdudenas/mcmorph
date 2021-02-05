@@ -56,7 +56,7 @@ def fill_nan_localmean(array,nan_idx):
     return array
 
 def grow_complete(nucleated_array,growth_anisotropy=2,pi_mutate=np.deg2rad(5),c_mutate=np.deg2rad(5),time=0, debug=None):
-    '''Takes nucleated array and grows crystal until the array is completely filled. 
+    '''Takes nucleated array and grows crystal until the array is completely filled.
         Uses a sobel gradient to find crystal edges for more efficient iterating (compared to interating over all not-nans)'''
     grow_array = nucleated_array.copy()
     while np.any(np.isnan(grow_array)==True):
@@ -67,9 +67,9 @@ def grow_complete(nucleated_array,growth_anisotropy=2,pi_mutate=np.deg2rad(5),c_
             crystal_sobel = sobel(crystal_binary)
             edges = np.ceil(crystal_binary*crystal_sobel)
             crystal_idx = np.column_stack(np.where(edges==1))
-        
+
         # sobel edge does not work on single pixels on edge of array, use this to fill in last few values
-        if len(np.column_stack(np.where(np.isnan(grow_array)))) < 5: 
+        if len(np.column_stack(np.where(np.isnan(grow_array)))) < 5:
             remaining_nans = np.column_stack(np.where(np.isnan(grow_array)))
             grow_array = fill_nan_localmean(grow_array,remaining_nans)
             print('almost done')
@@ -81,12 +81,12 @@ def grow_complete(nucleated_array,growth_anisotropy=2,pi_mutate=np.deg2rad(5),c_
             director_yup = (pos[0]+director_y)%len(grow_array)
             director_xdn = (pos[1]-director_x)%len(grow_array)
             director_ydn = (pos[0]-director_y)%len(grow_array)
-            
+
             if np.isnan(grow_array[director_yup,director_xup]):
                 grow_array[director_yup,director_xup] = grow_array[pos[0],pos[1]] + np.random.uniform(-pi_mutate,pi_mutate)
             if np.isnan(grow_array[director_ydn,director_xdn]):
                 grow_array[director_ydn,director_xdn] = grow_array[pos[0],pos[1]] + np.random.uniform(-pi_mutate,pi_mutate)
-                
+
             ## lateral crystal thickening, switch directors
             if time%growth_anisotropy == 0:
                 ## for diagonal pi-pi stacking
@@ -100,7 +100,7 @@ def grow_complete(nucleated_array,growth_anisotropy=2,pi_mutate=np.deg2rad(5),c_
                         grow_array[pos[0],director_xup] = grow_array[pos[0],pos[1]] + np.random.uniform(-c_mutate,c_mutate)
                     if np.isnan(grow_array[pos[0],director_xdn]):
                         grow_array[pos[0],director_xdn] = grow_array[pos[0],pos[1]] + np.random.uniform(-c_mutate,c_mutate)
-                        
+
                 ## for pi-pi direction vertical or horizontal
                 else:
                     director_xup = (pos[1]+director_y)%len(grow_array)
@@ -375,7 +375,7 @@ def grow_partial(nucleated_array, timesteps,growth_anisotropy=2,pi_mutate=np.deg
             crystal_sobel = sobel(crystal_binary)
             edges = np.ceil(crystal_binary*crystal_sobel)
             crystal_idx = np.column_stack(np.where(edges==1))
-            
+
         for pos in crystal_idx:
             ## crystallization along pi-pi stacking
             director_x = int(round(np.abs(np.cos(grow_array[pos[0],pos[1]]))))
@@ -384,12 +384,12 @@ def grow_partial(nucleated_array, timesteps,growth_anisotropy=2,pi_mutate=np.deg
             director_yup = (pos[0]+director_y)%len(grow_array)
             director_xdn = (pos[1]-director_x)%len(grow_array)
             director_ydn = (pos[0]-director_y)%len(grow_array)
-            
+
             if np.isnan(grow_array[director_yup,director_xup]):
                 grow_array[director_yup,director_xup] = grow_array[pos[0],pos[1]] + np.random.uniform(-pi_mutate,pi_mutate)
             if np.isnan(grow_array[director_ydn,director_xdn]):
                 grow_array[director_ydn,director_xdn] = grow_array[pos[0],pos[1]] + np.random.uniform(-pi_mutate,pi_mutate)
-                
+
             ## lateral crystal thickening, switch directors
             if time%growth_anisotropy == 0:
                 ## for diagonal pi-pi stacking
@@ -403,7 +403,7 @@ def grow_partial(nucleated_array, timesteps,growth_anisotropy=2,pi_mutate=np.deg
                         grow_array[pos[0],director_xup] = grow_array[pos[0],pos[1]] + np.random.uniform(-c_mutate,c_mutate)
                     if np.isnan(grow_array[pos[0],director_xdn]):
                         grow_array[pos[0],director_xdn] = grow_array[pos[0],pos[1]] + np.random.uniform(-c_mutate,c_mutate)
-                        
+
                 ## for pi-pi direction vertical or horizontal
                 else:
                     director_xup = (pos[1]+director_y)%len(grow_array)
