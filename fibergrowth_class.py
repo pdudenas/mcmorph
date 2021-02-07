@@ -99,7 +99,7 @@ class fibergrowth():
         fiber_count[:] = 0
         fiber_orientation[:] = 0
         fiber_center[:] = 0
-        r = np.linspace(-width,width,4*width)
+        r = np.linspace(-width,width,4*round(width))
 
         for i, (x,y) in enumerate(zip(xlist,ylist)):
             dx = np.round(x + r*np.cos(np.pi/2+theta[i]))%fiberspace.shape[1]
@@ -120,7 +120,7 @@ class fibergrowth():
         return fiber_count, fiber_orientation
 
     def grow_fibers(self,fiber_number,director,sigma1,sigma2,fiber_width,avg_width,
-                    fiberspace_size, fiber_length=None):
+                    fiberspace_size,fiber_width_sigma=0, fiber_length=None):
         fiberspace = np.zeros((fiberspace_size,fiberspace_size))
         alignment_space = fiberspace.copy()
 
@@ -134,6 +134,7 @@ class fibergrowth():
         if fiber_length is None:
             fiber_length = fiberspace_size
 
+
         for i in range(fiber_number):
             mu = self.rng.normal(director,sigma1)
 
@@ -145,7 +146,7 @@ class fibergrowth():
             fiber_count, fiber_orientation = self.expand_fiber(xlist,
                                                                ylist,
                                                                theta,
-                                                               fiber_width,
+                                                               self.rng.normal(fiber_width,fiber_width_sigma),
                                                                fiberspace,
                                                                fiber_count,
                                                                fiber_orientation,
@@ -208,19 +209,23 @@ class fibergrowth():
         fiber_count[:] = 0
         fiber_center[:] = 0
 
-        r = np.linspace(-width,width,4*width)
+        # random offset to the helical phase
+        offset = self.rng.normal(0,2)
+
+        #
+        r = np.linspace(-width,width,4*round(width))
 
         for i, (x,y) in enumerate(zip(xlist,ylist)):
             centerx = np.round(x)%fiberspace.shape[1]
             centery = np.round(y)%fiberspace.shape[0]
             fiber_center[centery.astype(int),centerx.astype(int)] = 1
-            
+
             dx = np.round(x + r*np.cos(np.pi/2+theta[i]))%fiberspace.shape[1]
             dy = np.round(y + r*np.sin(np.pi/2+theta[i]))%fiberspace.shape[0]
             fiber_count[dy.astype(int),dx.astype(int)] += 1
 
-            tan_comps[dy.astype(int),dx.astype(int),:] = self.tangent_components(scale,i,theta[i])
-            norm_comps[dy.astype(int),dx.astype(int),:] = self.normal_components(scale,i,theta[i])
+            tan_comps[dy.astype(int),dx.astype(int),:] = self.tangent_components(scale,i+offset,theta[i])
+            norm_comps[dy.astype(int),dx.astype(int),:] = self.normal_components(scale,i+offset,theta[i])
 
         tan_comps /= fiber_count[:,:,np.newaxis]
         norm_comps /= fiber_count[:,:,np.newaxis]
@@ -236,7 +241,7 @@ class fibergrowth():
 
 
     def grow_helicalfibers(self,fiber_number,director,sigma1,sigma2,fiber_width,avg_width,
-                    fiberspace_size, helical_scale, fiber_length=None):
+                    fiberspace_size, helical_scale,fiber_width_sigma=0, fiber_length=None):
         # pre-allocate here once, instead of every loop in expand_fiber
         fiberspace = np.zeros((fiberspace_size,fiberspace_size))
         fiber_count = fiberspace.copy()
@@ -261,7 +266,7 @@ class fibergrowth():
             fiber_count, tan_comps, norm_comps = self.map_helical(xlist,
                                                                ylist,
                                                                theta,
-                                                               fiber_width,
+                                                               self.rng.normal(fiber_width,fiber_width_sigma),
                                                                helical_scale,
                                                                fiberspace,
                                                                fiber_count,
