@@ -1,5 +1,5 @@
-# 4DSTEMtranslator
-Originally a class to translate 4DSTEM data to a Cy-RSoXS compatible format. Now includes much more functionality and should probably be renamed. 
+# STEMtranslator
+Set of tools to translate STEM data into Cy-RSoXS compatible format. The growth classes provide functionality to generate syntheic morphologies
 
 Current functionality
 1. Translate semi-reduced 4DSTEM & HRTREM data (I vs. q and chi)
