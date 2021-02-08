@@ -121,6 +121,20 @@ class fibergrowth():
 
     def grow_fibers(self,fiber_number,director,sigma1,sigma2,fiber_width,avg_width,
                     fiberspace_size,fiber_width_sigma=0, fiber_length=None):
+        ''' inputs-
+            fiber_number: number of fibers to grow
+            director: overall alignment direction of fibers
+            sigma1: standard deviation on the normal distribution that determines
+                    each individual fibers direction
+            sigma2: standard deviation on normal distribution that perturbs an
+                    invidual fibers direction as it grows
+            fiber_width: radius of fiber short axis in pixels
+            avg_width: smoothing window size
+            fiberspace_size: size of the square array
+            fiber_width_sigma: fiber width normal distribution standard deviation
+            fiber_length: number of steps to grow fiber. if None, defaults to
+                          fiberspace_size
+        '''
         fiberspace = np.zeros((fiberspace_size,fiberspace_size))
         alignment_space = fiberspace.copy()
 
@@ -242,6 +256,22 @@ class fibergrowth():
 
     def grow_helicalfibers(self,fiber_number,director,sigma1,sigma2,fiber_width,avg_width,
                     fiberspace_size, helical_scale,fiber_width_sigma=0, fiber_length=None):
+        ''' inputs-
+            fiber_number: number of fibers to grow
+            director: overall alignment direction of fibers
+            sigma1: standard deviation on the normal distribution that determines
+                    each individual fibers direction
+            sigma2: standard deviation on normal distribution that perturbs an
+                    invidual fibers direction as it grows
+            fiber_width: radius of fiber short axis in pixels
+            avg_width: smoothing window size
+            fiberspace_size: size of the square array
+            helical_scale: parameter to adjust helical pitch. Higher number is
+                            smaller pitch
+            fiber_width_sigma: fiber width normal distribution standard deviation
+            fiber_length: number of steps to grow fiber. if None, defaults to
+                          fiberspace_size
+        '''
         # pre-allocate here once, instead of every loop in expand_fiber
         fiberspace = np.zeros((fiberspace_size,fiberspace_size))
         fiber_count = fiberspace.copy()
