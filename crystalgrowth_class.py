@@ -85,6 +85,9 @@ class crystalgrowth():
             do_anisotropic_step: whether to do growth along the minor crystal axis
             do_periodic: whether to allow periodic wrapping
         """
+
+        xdim = grow_array.shape[1]
+        ydim = grow_array.shape[0]
         # crystallization along pi-pi stacking
         orientation = grow_array[pos]
         director_x = int(round(np.abs(np.cos(orientation))))
@@ -94,14 +97,32 @@ class crystalgrowth():
         director_xdn = (pos[1]-director_x)
         director_ydn = (pos[0]-director_y)
         if do_periodic:
-            director_xup %= len(grow_array)
-            director_yup %= len(grow_array)
-            director_xdn %= len(grow_array)
-            director_ydn %= len(grow_array)
+            director_xup %= xdim
+            director_yup %= ydim
+            director_xdn %= xdim
+            director_ydn %= ydim
 
-        if do_periodic or (director_yup < len(grow_array) and director_xup < len(grow_array)):
+        else:
+            if (director_yup < ydim and director_yup >= 0):
+                yup_in = True
+            else:
+                yup_in = False
+            if (director_xup < xdim and director_xup >= 0):
+                xup_in = True
+            else:
+                xup_in = False
+            if (director_ydn < ydim and director_ydn >= 0):
+                ydn_in = True
+            else:
+                ydn_in = False
+            if (director_xdn < xdim and director_xdn >= 0):
+                xdn_in = True
+            else:
+                xdn_in = False
+
+        if do_periodic or (yup_in and xup_in):
             self.add_orient(grow_array, (director_yup, director_xup), orientation, pi_mutate, next_crystal_idx)
-        if do_periodic or (director_ydn >= 0 and director_xdn >= 0):
+        if do_periodic or (ydn_in and xdn_in):
             self.add_orient(grow_array, (director_ydn, director_xdn), orientation, pi_mutate, next_crystal_idx)
 
         # lateral crystal thickening, switch directors
@@ -109,13 +130,13 @@ class crystalgrowth():
             # for diagonal pi-pi stacking
             if (np.abs(director_x) + np.abs(director_y)) == 2:
                 # fill in checkerboard pattern
-                if do_periodic or director_yup < len(grow_array):
+                if do_periodic or yup_in:
                     self.add_orient(grow_array, (director_yup, pos[1]), orientation, c_mutate, next_crystal_idx)
-                if do_periodic or director_ydn >= 0:
+                if do_periodic or ydn_in:
                     self.add_orient(grow_array, (director_ydn, pos[1]), orientation, c_mutate, next_crystal_idx)
-                if do_periodic or director_xup < len(grow_array):
+                if do_periodic or xup_in:
                     self.add_orient(grow_array, (pos[0], director_xup), orientation, c_mutate, next_crystal_idx)
-                if do_periodic or director_xdn >= 0:
+                if do_periodic or xdn_in:
                     self.add_orient(grow_array, (pos[0], director_xdn), orientation, c_mutate, next_crystal_idx)
 
             # for pi-pi direction vertical or horizontal
@@ -125,14 +146,32 @@ class crystalgrowth():
                 director_xdn = (pos[1]-director_y)
                 director_ydn = (pos[0]-director_x)
                 if do_periodic:
-                    director_xup %= len(grow_array)
-                    director_yup %= len(grow_array)
-                    director_xdn %= len(grow_array)
-                    director_ydn %= len(grow_array)
+                    director_xup %= xdim
+                    director_yup %= ydim
+                    director_xdn %= xdim
+                    director_ydn %= ydim
 
-                if do_periodic or (director_yup < len(grow_array) and director_xdn >= 0):
+                else:
+                    if (director_yup < ydim and director_yup >= 0):
+                        yup_in = True
+                    else:
+                        yup_in = False
+                    if (director_xup < xdim and director_xup >= 0):
+                        xup_in = True
+                    else:
+                        xup_in = False
+                    if (director_ydn < ydim and director_ydn >= 0):
+                        ydn_in = True
+                    else:
+                        ydn_in = False
+                    if (director_xdn < xdim and director_xdn >= 0):
+                        xdn_in = True
+                    else:
+                        xdn_in = False
+
+                if do_periodic or (yup_in and xdn_in):
                     self.add_orient(grow_array, (director_yup, director_xdn), orientation, c_mutate, next_crystal_idx)
-                if do_periodic or (director_xup < len(grow_array) and director_ydn >= 0):
+                if do_periodic or (xup_in and ydn_in):
                     self.add_orient(grow_array, (director_ydn, director_xup), orientation, c_mutate, next_crystal_idx)
 
 
