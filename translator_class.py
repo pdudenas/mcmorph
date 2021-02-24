@@ -88,7 +88,7 @@ class translator():
         return data_sub
 
 
-    def peak_finder(self,q, chi, data,qmin_exclude=1.5, qmax_exclude=2, prominence=10):
+    def peak_finder(self,q, chi, data,qmin_exclude=1.5, qmax_exclude=2, prominence=10,distance=np.pi/4):
         '''estimates how many gaussian peaks to fit
             and initial guesses for their starting position in chi'''
         peaks = []
@@ -96,8 +96,8 @@ class translator():
         data_1d = np.empty((len(data),len(chi)))
         q_idx = (q > qmin_exclude) & (q < qmax_exclude)
         for i in np.arange(0,len(data)):
-            data_1d[i,:] = np.mean(data[i,q_idx,:],axis=0)
-            peak_pos, _ = find_peaks(data_1d[i,:],prominence=prominence)
+            data_1d[i,:] = np.nanmean(data[i,q_idx,:],axis=0)
+            peak_pos, _ = find_peaks(data_1d[i,:],prominence=prominence,distance=distance)
             peaks.append(chi[peak_pos])
             num_peaks[i] = len(peak_pos)
         return peaks, num_peaks, data_1d
@@ -123,7 +123,7 @@ class translator():
 
                     low_bound[j*4] = 0              # a
                     low_bound[j*4+2] = 0            # c
-                    low_bound[j*4+3] = -10          # d
+                    low_bound[j*4+3] = 0          # d
 
                     high_bound[j*4] = 5000          # a
                     high_bound[j*4+2] = 40          # c

@@ -88,7 +88,7 @@ class crystalgrowth():
         # crystallization along pi-pi stacking
         orientation = grow_array[pos]
         director_x = int(round(np.abs(np.cos(orientation))))
-        director_y = int(round(np.abs(np.sin(orientation))))
+        director_y = int(round(np.sin(orientation)))
         director_xup = (pos[1]+director_x)
         director_yup = (pos[0]+director_y)
         director_xdn = (pos[1]-director_x)
