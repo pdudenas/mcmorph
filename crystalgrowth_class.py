@@ -55,19 +55,18 @@ class crystalgrowth():
             next_crystal_idx: list of indices to check in next growth cycle
         """
         # if there is already an orientation here, don't do anything
-        if not np.isnan(grow_array[location]):
-            return
+        if np.isnan(grow_array[location]):
 
-        new_orient = base_orientation + np.random.uniform(-mutate, mutate)
+            new_orient = base_orientation + np.random.uniform(-mutate, mutate)
 
-        # force to be within range [-pi/2, pi/2]
-        if new_orient > (0.5 * np.pi):
-            new_orient %= -(0.5 * np.pi)
-        if new_orient < -(0.5 * np.pi):
-            new_orient %= (0.5 * np.pi)
+            # force to be within range [-pi/2, pi/2]
+            if new_orient > (0.5 * np.pi):
+                new_orient %= -(0.5 * np.pi)
+            if new_orient < -(0.5 * np.pi):
+                new_orient %= (0.5 * np.pi)
 
-        grow_array[location] = new_orient
-        next_crystal_idx.append(location)
+            grow_array[location] = new_orient
+            next_crystal_idx.append(location)
 
 
     def grow_2d(self,grow_array, pos, pi_mutate, c_mutate, next_crystal_idx, do_anisotropic_step, do_periodic):
@@ -90,8 +89,8 @@ class crystalgrowth():
         ydim = grow_array.shape[0]
         # crystallization along pi-pi stacking
         orientation = grow_array[pos]
-        director_x = int(round(np.abs(np.cos(orientation))))
-        director_y = int(round(np.sin(orientation)))
+        director_x = round(abs(np.cos(orientation)))
+        director_y = round(np.sin(orientation))
         director_xup = (pos[1]+director_x)
         director_yup = (pos[0]+director_y)
         director_xdn = (pos[1]-director_x)
