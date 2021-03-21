@@ -39,6 +39,40 @@ class fibergrowth():
             ylist.append(ypos)
 
         return xlist, ylist
+    def grow_sino_fiber_core(self,fiber_length,mu,sigma,amplitude,period,fiberspace_size):
+        ''' Uses a list based method to propagate a fiber with a
+        uniform distribution about an overall director
+
+        mu - overall director direction
+        sigma - standard deviation of normal distribution
+
+        TO DO: code in other distributions'''
+        xlist = []
+        ylist = []
+        init_pos = self.rng.integers(0,fiberspace_size,2)
+        xpos = init_pos[1]
+        ypos = init_pos[0]
+        ylist.append(init_pos[0])
+        xlist.append(init_pos[1])
+        # grow fiber for given amount of steps
+        for i in np.arange(0,fiber_length):
+            # perturb fiber growth direction
+            director_perturb = amplitude*(np.sin(i*np.pi/period) + self.rng.normal(mu, sigma))
+            director = director_perturb
+            if director > np.pi/2+mu:
+                director = np.pi/2 + mu
+            if director < -np.pi/2 + mu:
+                director = -np.pi/2 + mu
+            xstep = np.cos(director)
+            ystep = np.sin(director)
+            xpos = (xpos + xstep)
+            ypos = (ypos + ystep)
+
+
+            xlist.append(xpos)
+            ylist.append(ypos)
+
+        return xlist, ylist
 
     def smooth_fiber_core(self,xlist, ylist, avg_width):
         ''' Smooths out grow_fiber_core results using a
@@ -154,6 +188,59 @@ class fibergrowth():
 
             xlist, ylist = self.grow_fiber_core(fiber_length,mu,sigma2,
                             fiberspace_size)
+
+            xsmooth, ysmooth = self.smooth_fiber_core(xlist,ylist,avg_width)
+            theta = self.axial_director(xsmooth,ysmooth)
+            fiber_count, fiber_orientation = self.expand_fiber(xlist,
+                                                               ylist,
+                                                               theta,
+                                                               self.rng.normal(fiber_width,fiber_width_sigma),
+                                                               fiberspace,
+                                                               fiber_count,
+                                                               fiber_orientation,
+                                                               fiber_center)
+            fiberspace += fiber_count
+            alignment_space += fiber_orientation
+
+        alignment_space /= fiberspace
+
+        return fiberspace, alignment_space
+
+    def grow_sino_fibers(self,fiber_number,director,sigma1,sigma2,fiber_width,avg_width,
+                    fiberspace_size,amplitude, period, fiber_width_sigma=0, fiber_length=None):
+        ''' inputs-
+            fiber_number: number of fibers to grow
+            director: overall alignment direction of fibers
+            sigma1: standard deviation on the normal distribution that determines
+                    each individual fibers direction
+            sigma2: standard deviation on normal distribution that perturbs an
+                    invidual fibers direction as it grows
+            fiber_width: radius of fiber short axis in pixels
+            avg_width: smoothing window size
+            fiberspace_size: size of the square array
+            fiber_width_sigma: fiber width normal distribution standard deviation
+            fiber_length: number of steps to grow fiber. if None, defaults to
+                          fiberspace_size
+        '''
+        fiberspace = np.zeros((fiberspace_size,fiberspace_size))
+        alignment_space = fiberspace.copy()
+
+        # pre-allocate here once, instead of every loop in expand_fiber
+        fiber_count = fiberspace.copy()
+        fiber_orientation = fiberspace.copy()
+        fiber_center = fiberspace.copy()
+
+
+
+        if fiber_length is None:
+            fiber_length = fiberspace_size
+
+
+        for i in range(fiber_number):
+            mu = self.rng.normal(director,sigma1)
+
+            xlist, ylist = self.grow_sino_fiber_core(fiber_length,mu,sigma2,
+                            amplitude, period, fiberspace_size)
 
             xsmooth, ysmooth = self.smooth_fiber_core(xlist,ylist,avg_width)
             theta = self.axial_director(xsmooth,ysmooth)
