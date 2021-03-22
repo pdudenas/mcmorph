@@ -47,6 +47,7 @@ class fibergrowth():
         sigma - standard deviation of normal distribution
 
         TO DO: code in other distributions'''
+        ymax, xmax = director_field.shape
         xlist = []
         ylist = []
         init_pos = self.rng.integers(0,fiberspace_size,2)
@@ -57,7 +58,7 @@ class fibergrowth():
         # grow fiber for given amount of steps
         for i in np.arange(0,fiber_length):
             # perturb fiber growth direction
-            director_perturb = director_field[int(ypos),int(xpos)] + self.rng.normal(0, sigma)
+            director_perturb = director_field[int(ypos)%ymax,int(xpos)%xmax] + self.rng.normal(0, sigma)
             director = director_perturb
             xstep = np.cos(director)
             ystep = np.sin(director)
@@ -69,6 +70,7 @@ class fibergrowth():
             ylist.append(ypos)
 
         return xlist, ylist
+
     def grow_sino_fiber_core(self,fiber_length,mu,sigma,amplitude,period,fiberspace_size):
         ''' Uses a list based method to propagate a fiber with a
         uniform distribution about an overall director
