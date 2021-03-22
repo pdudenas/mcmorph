@@ -40,7 +40,7 @@ class fibergrowth():
 
         return xlist, ylist
 
-    def grow_fiber_drfield(self,fiber_length,director_field,sigma):
+    def grow_fiber_drfield(self,fiber_length,director_field,sigma,fiberspace_size):
         ''' Uses a list based method to propagate a fiber through a
         pre-generated director field
         director_field - pre-generated director field
