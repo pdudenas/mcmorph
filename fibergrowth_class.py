@@ -39,6 +39,36 @@ class fibergrowth():
             ylist.append(ypos)
 
         return xlist, ylist
+
+    def grow_fiber_drfield(self,fiber_length,director_field,sigma):
+        ''' Uses a list based method to propagate a fiber through a
+        pre-generated director field
+        director_field - pre-generated director field
+        sigma - standard deviation of normal distribution
+
+        TO DO: code in other distributions'''
+        xlist = []
+        ylist = []
+        init_pos = self.rng.integers(0,fiberspace_size,2)
+        xpos = init_pos[1]
+        ypos = init_pos[0]
+        ylist.append(init_pos[0])
+        xlist.append(init_pos[1])
+        # grow fiber for given amount of steps
+        for i in np.arange(0,fiber_length):
+            # perturb fiber growth direction
+            director_perturb = director_field[int(ypos),int(xpos)] + self.rng.normal(0, sigma)
+            director = director_perturb
+            xstep = np.cos(director)
+            ystep = np.sin(director)
+            xpos = (xpos + xstep)
+            ypos = (ypos + ystep)
+
+
+            xlist.append(xpos)
+            ylist.append(ypos)
+
+        return xlist, ylist
     def grow_sino_fiber_core(self,fiber_length,mu,sigma,amplitude,period,fiberspace_size):
         ''' Uses a list based method to propagate a fiber with a
         uniform distribution about an overall director
