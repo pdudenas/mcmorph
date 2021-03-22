@@ -40,7 +40,7 @@ class fibergrowth():
 
         return xlist, ylist
 
-    def grow_fiber_drfield(self,fiber_length,director_field,sigma,fiberspace_size):
+    def grow_fiber_drfield(self,fiber_length,director_field,sigma):
         ''' Uses a list based method to propagate a fiber through a
         pre-generated director field
         director_field - pre-generated director field
@@ -50,7 +50,7 @@ class fibergrowth():
         ymax, xmax = director_field.shape
         xlist = []
         ylist = []
-        init_pos = self.rng.integers(0,fiberspace_size,2)
+        init_pos = self.rng.integers(0,ymax,2)
         xpos = init_pos[1]
         ypos = init_pos[0]
         ylist.append(init_pos[0])
@@ -237,6 +237,56 @@ class fibergrowth():
         alignment_space /= fiberspace
 
         return fiberspace, alignment_space
+
+
+    def grow_fibers_field((self,fiber_number,director_field,sigma,fiber_width,avg_width,fiber_width_sigma=0, fiber_length=None):
+        ''' inputs-
+            fiber_number: number of fibers to grow
+            director: overall alignment direction of fibers
+            sigma1: standard deviation on the normal distribution that determines
+                    each individual fibers direction
+            sigma2: standard deviation on normal distribution that perturbs an
+                    invidual fibers direction as it grows
+            fiber_width: radius of fiber short axis in pixels
+            avg_width: smoothing window size
+            fiberspace_size: size of the square array
+            fiber_width_sigma: fiber width normal distribution standard deviation
+            fiber_length: number of steps to grow fiber. if None, defaults to
+                          fiberspace_size
+        '''
+                fiberspace = np.zeros(director_field.shape)
+                alignment_space = fiberspace.copy()
+
+                # pre-allocate here once, instead of every loop in expand_fiber
+                fiber_count = fiberspace.copy()
+                fiber_orientation = fiberspace.copy()
+                fiber_center = fiberspace.copy()
+
+
+
+                if fiber_length is None:
+                    fiber_length = director_field.shape[0]
+
+
+                for i in range(fiber_number):
+
+                    xlist, ylist = self.grow_fiber_drfield(fiber_length,director_field,sigma)
+
+                    xsmooth, ysmooth = self.smooth_fiber_core(xlist,ylist,avg_width)
+                    theta = self.axial_director(xsmooth,ysmooth)
+                    fiber_count, fiber_orientation = self.expand_fiber(xlist,
+                                                                       ylist,
+                                                                       theta,
+                                                                       self.rng.normal(fiber_width,fiber_width_sigma),
+                                                                       fiberspace,
+                                                                       fiber_count,
+                                                                       fiber_orientation,
+                                                                       fiber_center)
+                    fiberspace += fiber_count
+                    alignment_space += fiber_orientation
+
+                alignment_space /= fiberspace
+
 
     def grow_sino_fibers(self,fiber_number,director,sigma1,sigma2,fiber_width,avg_width,
                     fiberspace_size,amplitude, period, fiber_width_sigma=0, fiber_length=None):
