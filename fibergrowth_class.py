@@ -169,6 +169,7 @@ class fibergrowth():
         fiber_count[:] = 0
         fiber_orientation[:] = 0
         fiber_center[:] = 0
+        width = max(width,1)
         r = np.linspace(-width,width,4*round(width))
 
         for i, (x,y) in enumerate(zip(xlist,ylist)):
