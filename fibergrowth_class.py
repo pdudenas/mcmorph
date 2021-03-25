@@ -365,6 +365,7 @@ class fibergrowth():
         return xout, yout, zcomp
 
     def fill_nans_helical(self, fiber_center,tan_comps,norm_comps,width,theta,scale):
+        width = max(1,width)
         fiber_center=dilation(fiber_center,disk(width))
 
         fill_idx = (fiber_center == 1) & (np.isnan(np.sum(tan_comps,axis=2)))
