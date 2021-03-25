@@ -71,7 +71,7 @@ class fibergrowth():
 
         return xlist, ylist
 
-    def grow_sino_fiber_core(self,fiber_length,mu,sigma,amplitude,period,fiberspace_size):
+    def grow_sino_fiber_core(self,fiber_length,mu,sigma,amplitude,period,fiberspace_size,amplitude_sigma = 0.1, period_sigma=0.1):
         ''' Uses a list based method to propagate a fiber with a
         uniform distribution about an overall director
 
@@ -86,6 +86,10 @@ class fibergrowth():
         ypos = init_pos[0]
         ylist.append(init_pos[0])
         xlist.append(init_pos[1])
+
+        amplitude += self.rng.normal(0,amplitude*amplitude_sigma)
+        period += self.rng.normal(0,period*period_sigma)
+
         # grow fiber for given amount of steps
         for i in np.arange(0,fiber_length):
             # perturb fiber growth direction
@@ -239,7 +243,7 @@ class fibergrowth():
         return fiberspace, alignment_space
 
 
-    def grow_fibers_field((self,fiber_number,director_field,sigma,fiber_width,avg_width,fiber_width_sigma=0, fiber_length=None):
+    def grow_fibers_field(self,fiber_number,director_field,sigma,fiber_width,avg_width,fiber_width_sigma=0, fiber_length=None):
         ''' inputs-
             fiber_number: number of fibers to grow
             director: overall alignment direction of fibers
