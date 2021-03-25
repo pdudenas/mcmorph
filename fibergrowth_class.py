@@ -499,3 +499,73 @@ class fibergrowth():
         alignment_binorm = np.cross(alignment_tan,alignment_norm)
 
         return fiberspace, alignment_tan, alignment_norm, alignment_binorm
+
+    def grow_sino_helicalfibers(self,fiber_number,director,sigma1,sigma2,fiber_width,avg_width,
+                    fiberspace_size, helical_scale,amplitude,period,fiber_width_sigma=0, fiber_length=None):
+        ''' inputs-
+            fiber_number: number of fibers to grow
+            director: overall alignment direction of fibers
+            sigma1: standard deviation on the normal distribution that determines
+                    each individual fibers direction
+            sigma2: standard deviation on normal distribution that perturbs an
+                    invidual fibers direction as it grows
+            fiber_width: radius of fiber short axis in pixels
+            avg_width: smoothing window size
+            fiberspace_size: size of the square array
+            helical_scale: parameter to adjust helical pitch. Higher number is
+                            smaller pitch
+            fiber_width_sigma: fiber width normal distribution standard deviation
+            fiber_length: number of steps to grow fiber. if None, defaults to
+                          fiberspace_size
+        '''
+        # pre-allocate here once, instead of every loop in expand_fiber
+        fiberspace = np.zeros((fiberspace_size,fiberspace_size))
+        fiber_count = fiberspace.copy()
+        fiber_center = fiberspace.copy()
+
+        alignment_tan = np.zeros((fiberspace_size,fiberspace_size,3))
+        alignment_norm = alignment_tan.copy()
+        tan_comps = alignment_tan.copy()
+        norm_comps = alignment_tan.copy()
+
+        if fiber_length is None:
+            fiber_length = fiberspace_size
+
+        for i in range(fiber_number):
+            mu = self.rng.normal(director,sigma1)
+
+            xlist, ylist = self.grow_sino_fiber_core(fiber_length,mu,sigma2,amplitude, period,
+                            fiberspace_size)
+
+            xsmooth, ysmooth = self.smooth_fiber_core(xlist,ylist,avg_width)
+            theta = self.axial_director(xsmooth,ysmooth)
+            fiber_count, tan_comps, norm_comps = self.map_helical(xlist,
+                                                               ylist,
+                                                               theta,
+                                                               self.rng.normal(fiber_width,fiber_width_sigma),
+                                                               helical_scale,
+                                                               fiberspace,
+                                                               fiber_count,
+                                                               tan_comps,
+                                                               norm_comps,
+                                                               fiber_center)
+            fiberspace += fiber_count
+            alignment_tan += tan_comps
+            alignment_norm += norm_comps
+
+        # divide sum of tangent and normal componenets by number of fibers
+        alignment_tan /= fiberspace[:,:,np.newaxis]
+        alignment_norm /= fiberspace[:,:,np.newaxis]
+
+        alignment_tan[np.isnan(alignment_tan)] = 0
+        alignment_norm[np.isnan(alignment_norm)] = 0
+
+        # make sure magnitude of tangential and normal components are both 1
+        dmag = np.sqrt(np.sum(alignment_tan**2,axis=2))
+        d2mag = np.sqrt(np.sum(alignment_norm**2,axis=2))
+        alignment_tan /= dmag[:,:,np.newaxis]
+        alignment_norm /= d2mag[:,:,np.newaxis]
+        # calculate binormal vector array from cross product
+        alignment_binorm = np.cross(alignment_tan,alignment_norm)
+
+        return fiberspace, alignment_tan, alignment_norm, alignment_binorm
