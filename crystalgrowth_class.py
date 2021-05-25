@@ -11,6 +11,8 @@ class crystalgrowth():
     def new_func(self):
         return 5
 
+    def newnew_func(self):
+        return 5*5
 
     def nucleate(self,blank_array,nucleation_sites):
         """Seeds the structure with given number of sites
