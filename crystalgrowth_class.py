@@ -8,11 +8,6 @@ class crystalgrowth():
         else:
             self.rng = np.random.default_rng()
 
-    def new_func(self):
-        return 5
-
-    def newnew_func(self):
-        return 5*5
 
     def nucleate(self,blank_array,nucleation_sites):
         """Seeds the structure with given number of sites
