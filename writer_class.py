@@ -30,7 +30,7 @@ class writer():
                 f.create_dataset('morphology_variables/morphology_creator', data=author)
                 f.create_dataset('morphology_variables/name', data=author)
                 f.create_dataset('morphology_variables/version', data=datetime.datetime.now().strftime("%m/%d/%Y, %H:%M:%S"))
-                f.create_dataset('morphology_variables/voxel_size_nm', data=PhysSize)
+                f.create_dataset('morphology_variables/voxel_size_nm', data=float(PhysSize))
 
                 f.create_dataset('igor_parameters/igorefield', data="0,1")
                 f.create_dataset('igor_parameters/igormaterials', data=material_string)
@@ -48,18 +48,19 @@ class writer():
     def write_config(self,fname,startEnergy, endEnergy, incrementEnergy,
                     startAngle,endAngle, incrementAngle, numThreads,
                     numX, numY, numZ, PhysSize):
+
         f = open(fname, "w")
-        f.write("StartEnergy = " + str(startEnergy) + ";\n");
-        f.write("EndEnergy = " + str(endEnergy) + ";\n");
-        f.write("IncrementEnergy = " + str(incrementEnergy) + ";\n");
-        f.write("StartAngle = " + str(startAngle) + ";\n");
-        f.write("EndAngle = " + str(endAngle) + ";\n");
-        f.write("IncrementAngle = " + str(incrementAngle) + ";\n");
-        f.write("NumThreads = " + str(numThreads) + ";\n");
-        f.write("NumX = " + str(numX) + ";\n");
-        f.write("NumY = " + str(numY) + ";\n");
-        f.write("NumZ = " + str(numZ) + ";\n");
-        f.write("PhysSize = " + str(PhysSize) + ";\n");
+        f.write("StartEnergy = " + str(float(startEnergy)) + ";\n");
+        f.write("EndEnergy = " + str(float(endEnergy)) + ";\n");
+        f.write("IncrementEnergy = " + str(float(incrementEnergy)) + ";\n");
+        f.write("StartAngle = " + str(float(startAngle)) + ";\n");
+        f.write("EndAngle = " + str(float(endAngle)) + ";\n");
+        f.write("IncrementAngle = " + str(float(incrementAngle)) + ";\n");
+        f.write("NumThreads = " + str(int(numThreads)) + ";\n");
+        f.write("NumX = " + str(int(numX)) + ";\n");
+        f.write("NumY = " + str(int(numY)) + ";\n");
+        f.write("NumZ = " + str(int(numZ)) + ";\n");
+        f.write("PhysSize = " + str(float(PhysSize)) + ";\n");
         f.close();
 
     def find_nearest(self,array, value):
@@ -127,6 +128,11 @@ class writer():
 
     def write_materials(self, startEnergy, endEnergy,increment,dict,labelEnergy,numMaterial):
         NumEnergy = int(np.round((endEnergy - startEnergy)/increment + 1));
+        # force types
+        startEnergy = float(startEnergy)
+        endEnergy = float(endEnergy)
+        increment = float(increment)
+        numMaterial = int(numMaterial)
 
         for numMat in range(0,numMaterial):
             f = open("Material" + str(numMat) + ".txt", "w")
@@ -134,7 +140,7 @@ class writer():
             if(fname != 'vacuum'):
                 Data = np.loadtxt(fname,skiprows=1);
                 Data = Data[Data[:,labelEnergy["Energy"]].argsort()]
-                for i in range(0,NumEnergy):
+                for i in range(0,NumEnergy):3
                     currentEnergy = startEnergy + i* increment;
                     nearest_id = self.find_nearest(Data[:,labelEnergy["Energy"]],currentEnergy)
                     ValArray = self.get_interpolated_value(Data,currentEnergy,nearest_id,labelEnergy["Energy"])
