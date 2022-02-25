@@ -67,29 +67,25 @@ class writer():
         idx = (np.abs(array - value)).argmin()
         return idx
 
-    def get_interpolated_value(self,array,value,nearest_id,energy_id):
-        valArray = np.zeros(array.shape[1]);
-        if(array[nearest_id][energy_id] > value):
-            xp = [array[nearest_id][energy_id], array[nearest_id - 1][energy_id]];
-            for i in range(1,len(valArray)):
-                yp = [array[nearest_id][i], array[nearest_id - 1][i]];
-    #             print(xp,yp)
-                valArray[i] = np.interp(value,xp,yp);
+    def get_interpolated_value(self, array, value, nearest_id, energy_id):
+        valArray = np.zeros(array.shape[1])
+        if (array[nearest_id][energy_id] > value):
+            xp = [array[nearest_id - 1][energy_id], array[nearest_id][energy_id]]
+            for i in range(0, array.shape[1]):
+                yp = [array[nearest_id - 1][i], array[nearest_id][i]]
+                valArray[i] = np.interp(value, xp, yp)
 
         elif (array[nearest_id][energy_id] < value):
-            xp = [array[nearest_id][energy_id], array[nearest_id + 1][energy_id]];
-            for i in range(1,len(valArray)):
-                yp = [array[nearest_id][i], array[nearest_id + 1][i]];
-    #             print(xp,yp)
-                valArray[i] = np.interp(value,xp,yp);
+            xp = [array[nearest_id][energy_id], array[nearest_id + 1][energy_id]]
+            for i in range(0, array.shape[1]):
+                yp = [array[nearest_id][i], array[nearest_id + 1][i]]
+                valArray[i] = np.interp(value, xp, yp)
 
         else:
-            for i in range(1,len(valArray)):
-                valArray[i] = value[nearest_id][i];
+            for i in range(0, len(valArray)):
+                valArray[i] = array[nearest_id][i]
 
-        valArray[energy_id] = value;
-    #     print(valArray)
-        return valArray;
+        return valArray
 
     def dump_dataVacuum(self,index,energy,f):
         Header = "EnergyData" + str(index) +":\n{\n";
@@ -140,7 +136,7 @@ class writer():
             if(fname != 'vacuum'):
                 Data = np.loadtxt(fname,skiprows=1);
                 Data = Data[Data[:,labelEnergy["Energy"]].argsort()]
-                for i in range(0,NumEnergy):3
+                for i in range(0,NumEnergy):
                     currentEnergy = startEnergy + i* increment;
                     nearest_id = self.find_nearest(Data[:,labelEnergy["Energy"]],currentEnergy)
                     ValArray = self.get_interpolated_value(Data,currentEnergy,nearest_id,labelEnergy["Energy"])

@@ -254,7 +254,7 @@ class crystalgrowth():
 
 
     def grow_complete(self,nucleated_array, growth_anisotropy=2, pi_mutate=np.deg2rad(5), c_mutate=np.deg2rad(5),
-                            do_periodic=False, debug=None):
+                            do_periodic=False, debug=None, return_all=False):
         """Takes nucleated array and grows crystal until the array is completely filled.
 
         This uses a queueing method for identifying growth locations.
@@ -279,6 +279,9 @@ class crystalgrowth():
         revisit = []  # these are points we need to revisit due to anisotropy
 
         time = 0  # growth cycle (used for anisotropy)
+
+        if return_all:
+            array_list = []
 
         ndim = grow_array.ndim
 
@@ -318,7 +321,15 @@ class crystalgrowth():
             if debug is not None and time == debug:
                 return grow_array
             time += 1
-        return grow_array
+            if return_all:
+                array_list.append(grow_array.copy())
+        if return_all:
+            grow_array_all = np.zeros((time,*grow_array.shape))
+            for i in range(time):
+                grow_array_all[i,:,:] = array_list[i]
+            return grow_array_all
+        else:
+            return grow_array
 
     def grow_partial(self,nucleated_array, timesteps, growth_anisotropy=2, pi_mutate=np.deg2rad(5), c_mutate=np.deg2rad(5),
                             do_periodic=False, debug=None):

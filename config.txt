@@ -1,0 +1,11 @@
+StartEnergy = 270.0;
+EndEnergy = 300.0;
+IncrementEnergy = 1.0;
+StartAngle = 0.0;
+EndAngle = 360.0;
+IncrementAngle = 360.0;
+NumThreads = 4;
+NumX = 128;
+NumY = 128;
+NumZ = 1;
+PhysSize = 5.0;
