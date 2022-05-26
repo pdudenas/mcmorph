@@ -484,7 +484,7 @@ class fibergrowth():
             alignment_tan += tan_comps
             alignment_norm += norm_comps
 
-        # divide sum of tangent and normal componenets by number of fibers
+        # divide sum of tangent and normal components by number of fibers
         alignment_tan /= fiberspace[:,:,np.newaxis]
         alignment_norm /= fiberspace[:,:,np.newaxis]
 
