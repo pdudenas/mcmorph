@@ -3,7 +3,7 @@ import numba as nb
 from numba.typed import List
 from numba import prange
 
-@nb.njit('float64[:,:](int64,float64,float64,int64)')
+@nb.njit()
 def grow_fiber_core(fiber_length,mu,sigma,fiberspace_size):
     ''' Creates a fiber core with a
     uniform distribution about an overall director
@@ -71,7 +71,7 @@ def grow_sino_fiber_core(fiber_length,mu,sigma,amplitude,period,fiberspace_size,
 
     return xylist
 
-@nb.njit('float64[:,:](float64[:,:],int8)')
+@nb.njit()
 def smooth_fiber_core(xylist, avg_width):
     ''' Smooths out grow_fiber_core results using a
     moving window average of width avg_width.
@@ -209,7 +209,7 @@ def expand_fiber(xylist,theta,width,fiberspace_size):
 
         return fiber_center, fiber_orientation
 
-@nb.njit(parallel=True)
+@nb.njit()
 def grow_fibers(fiber_number,fiber_length,director,sigma1,sigma2,fiber_width,avg_width,
                     fiberspace_size,fiber_width_sigma=0):
     ''' inputs-
@@ -229,7 +229,7 @@ def grow_fibers(fiber_number,fiber_length,director,sigma1,sigma2,fiber_width,avg
     fiberspace = np.zeros((fiberspace_size,fiberspace_size),dtype=np.float64)
     alignment_space = np.zeros((fiberspace_size,fiberspace_size),dtype=np.float64)
 
-    for i in prange(fiber_number):
+    for i in range(fiber_number):
         mu = np.random.normal(director,sigma1)
 
         xylist = grow_fiber_core(fiber_length,mu,sigma2,fiberspace_size)
@@ -243,7 +243,7 @@ def grow_fibers(fiber_number,fiber_length,director,sigma1,sigma2,fiber_width,avg
 
     return fiberspace, alignment_space
 
-@nb.njit(parallel=True)
+@nb.njit()
 def grow_sino_fibers(fiber_number,fiber_length,director,sigma1,sigma2,fiber_width,avg_width,
                 fiberspace_size,amplitude, period, fiber_width_sigma=0,amplitude_sigma=0.1, period_sigma=0.1):
     ''' inputs-
@@ -264,7 +264,7 @@ def grow_sino_fibers(fiber_number,fiber_length,director,sigma1,sigma2,fiber_widt
     alignment_space = np.zeros((fiberspace_size,fiberspace_size),dtype=np.float64)
 
 
-    for i in prange(fiber_number):
+    for i in range(fiber_number):
         mu = np.random.normal(director,sigma1)
 
         xylist = grow_sino_fiber_core(fiber_length, mu, sigma2,
