@@ -228,11 +228,12 @@ def grow_fibers(fiber_number,fiber_length,director,sigma1,sigma2,fiber_width,avg
     '''
     fiberspace = np.zeros((fiberspace_size,fiberspace_size),dtype=np.float64)
     alignment_space = np.zeros((fiberspace_size,fiberspace_size),dtype=np.float64)
-
+    all_cores = List()
     for i in prange(fiber_number):
         mu = np.random.normal(director,sigma1)
 
         xylist = grow_fiber_core(fiber_length,mu,sigma2,fiberspace_size)
+        all_cores.append(xylist)
         xysmooth = smooth_fiber_core(xylist,avg_width)
         theta = axial_director(xysmooth)
         fiber_count, fiber_orientation = expand_fiber(xylist,theta,np.random.normal(fiber_width,fiber_width_sigma),fiberspace_size)
@@ -241,7 +242,7 @@ def grow_fibers(fiber_number,fiber_length,director,sigma1,sigma2,fiber_width,avg
 
     alignment_space /= fiberspace
 
-    return fiberspace, alignment_space
+    return fiberspace, alignment_space, all_cores
 
 @nb.njit(parallel=True)
 def grow_sino_fibers(fiber_number,fiber_length,director,sigma1,sigma2,fiber_width,avg_width,
@@ -263,14 +264,14 @@ def grow_sino_fibers(fiber_number,fiber_length,director,sigma1,sigma2,fiber_widt
     fiberspace = np.zeros((fiberspace_size,fiberspace_size),dtype=np.float64)
     alignment_space = np.zeros((fiberspace_size,fiberspace_size),dtype=np.float64)
 
-
+    all_cores = List()
     for i in prange(fiber_number):
         mu = np.random.normal(director,sigma1)
 
         xylist = grow_sino_fiber_core(fiber_length, mu, sigma2,
                                         amplitude, period, fiberspace_size,
                                         amplitude_sigma=amplitude_sigma, period_sigma=period_sigma)
-
+        all_cores.append(xylist)
         xysmooth = smooth_fiber_core(xylist,avg_width)
         theta = axial_director(xysmooth)
         fiber_count, fiber_orientation = expand_fiber(xylist,theta,np.random.normal(fiber_width,fiber_width_sigma),fiberspace_size)
@@ -279,7 +280,7 @@ def grow_sino_fibers(fiber_number,fiber_length,director,sigma1,sigma2,fiber_widt
 
     alignment_space /= fiberspace
 
-    return fiberspace, alignment_space
+    return fiberspace, alignment_space, all_cores
 
 class fibergrowth():
 
