@@ -2,6 +2,8 @@ import numpy as np
 import numba as nb
 from numba.typed import List
 from numba import prange
+from skimage.morphology import dilation
+from skimage.morphology import disk
 
 @nb.njit()
 def grow_fiber_core(fiber_length,mu,sigma,fiberspace_size):
@@ -307,7 +309,7 @@ class fibergrowth():
         # grow fiber for given amount of steps
         for i in np.arange(0,fiber_length):
             # perturb fiber growth direction
-            director_perturb = director_field[int(ypos)%ymax,int(xpos)%xmax] + self.rng.normal(0, sigma)
+            director_perturb = director_field[int(ypos)%ymax,int(xpos)%xmax] + np.random.normal(0, sigma)
             director = director_perturb
             xstep = np.cos(director)
             ystep = np.sin(director)
@@ -352,7 +354,7 @@ class fibergrowth():
 
 
         for i in range(fiber_number):
-            mu = self.rng.normal(director,sigma1)
+            mu = np.random.normal(director,sigma1)
 
             xlist, ylist = self.grow_fiber_core(fiber_length,mu,sigma2,
                             fiberspace_size)
@@ -362,7 +364,7 @@ class fibergrowth():
             fiber_count, fiber_orientation = self.expand_fiber(xlist,
                                                                ylist,
                                                                theta,
-                                                               self.rng.normal(fiber_width,fiber_width_sigma),
+                                                               np.random.normal(fiber_width,fiber_width_sigma),
                                                                fiberspace,
                                                                fiber_count,
                                                                fiber_orientation,
@@ -413,7 +415,7 @@ class fibergrowth():
             fiber_count, fiber_orientation = self.expand_fiber(xlist,
                                                                ylist,
                                                                theta,
-                                                               self.rng.normal(fiber_width,fiber_width_sigma),
+                                                               np.random.normal(fiber_width,fiber_width_sigma),
                                                                fiberspace,
                                                                fiber_count,
                                                                fiber_orientation,
@@ -457,7 +459,7 @@ class fibergrowth():
 
 
         for i in range(fiber_number):
-            mu = self.rng.normal(director,sigma1)
+            mu = np.random.normal(director,sigma1)
 
             xlist, ylist = self.grow_sino_fiber_core(fiber_length,mu,sigma2,
                             amplitude, period, fiberspace_size)
@@ -467,7 +469,7 @@ class fibergrowth():
             fiber_count, fiber_orientation = self.expand_fiber(xlist,
                                                                ylist,
                                                                theta,
-                                                               self.rng.normal(fiber_width,fiber_width_sigma),
+                                                               np.random.normal(fiber_width,fiber_width_sigma),
                                                                fiberspace,
                                                                fiber_count,
                                                                fiber_orientation,
@@ -532,7 +534,7 @@ class fibergrowth():
         fiber_center[:] = 0
 
         # random offset to the helical phase
-        offset = self.rng.normal(0,2)
+        offset = np.random.normal(0,2)
 
         #
         r = np.linspace(-width,width,4*round(width))
@@ -594,7 +596,7 @@ class fibergrowth():
             fiber_length = fiberspace_size
 
         for i in range(fiber_number):
-            mu = self.rng.normal(director,sigma1)
+            mu = np.random.normal(director,sigma1)
 
             xlist, ylist = self.grow_fiber_core(fiber_length,mu,sigma2,
                             fiberspace_size)
@@ -604,7 +606,7 @@ class fibergrowth():
             fiber_count, tan_comps, norm_comps = self.map_helical(xlist,
                                                                ylist,
                                                                theta,
-                                                               self.rng.normal(fiber_width,fiber_width_sigma),
+                                                               np.random.normal(fiber_width,fiber_width_sigma),
                                                                helical_scale,
                                                                fiberspace,
                                                                fiber_count,
@@ -664,7 +666,7 @@ class fibergrowth():
             fiber_length = fiberspace_size
 
         for i in range(fiber_number):
-            mu = self.rng.normal(director,sigma1)
+            mu = np.random.normal(director,sigma1)
 
             xlist, ylist = self.grow_sino_fiber_core(fiber_length,mu,sigma2,amplitude, period,
                             fiberspace_size)
@@ -674,7 +676,7 @@ class fibergrowth():
             fiber_count, tan_comps, norm_comps = self.map_helical(xlist,
                                                                ylist,
                                                                theta,
-                                                               self.rng.normal(fiber_width,fiber_width_sigma),
+                                                               np.random.normal(fiber_width,fiber_width_sigma),
                                                                helical_scale,
                                                                fiberspace,
                                                                fiber_count,
