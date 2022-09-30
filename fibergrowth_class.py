@@ -1,45 +1,459 @@
 import numpy as np
-from skimage.morphology import dilation, disk
+import numba as nb
+from numba.typed import List
+from numba import prange
+from skimage.morphology import dilation
+from skimage.morphology import disk
+
+@nb.njit()
+def grow_fiber_core(fiber_length,mu,sigma,fiberspace_size):
+    ''' Creates a fiber core with a
+    uniform distribution about an overall director
+
+    mu - overall director direction
+    sigma - standard deviation of normal distribution
+    TO DO: code in other distributions'''
+
+    xylist = np.empty((fiber_length,2))
+
+    ypos = np.random.randint(0,fiberspace_size)
+    xpos = np.random.randint(0,fiberspace_size)
+    xylist[0,0] = ypos
+    xylist[0,1] = xpos
+    # grow fiber for given amount of steps
+    for i in range(1,fiber_length):
+        # perturb fiber growth direction
+        director_perturb = np.random.normal(mu, sigma)
+        xstep = np.cos(director_perturb)
+        ystep = np.sin(director_perturb)
+        xpos = (xpos + xstep)
+        ypos = (ypos + ystep)
+
+        xylist[i,1] = xpos
+        xylist[i,0] = ypos
+
+    return xylist
+
+@nb.njit()
+def grow_sino_fiber_core(fiber_length,mu,sigma,amplitude,period,fiberspace_size,amplitude_sigma = 0.1, period_sigma=0.1):
+    ''' Uses a list based method to propagate a fiber with a
+    uniform distribution about an overall director
+
+    mu - overall director direction
+    sigma - standard deviation of normal distribution
+
+    TO DO: code in other distributions'''
+    xylist = np.empty((fiber_length,2))
+
+    ypos = np.random.randint(0,fiberspace_size)
+    xpos = np.random.randint(0,fiberspace_size)
+    xylist[0,0] = ypos
+    xylist[0,1] = xpos
+
+    amplitude += np.random.normal(0,amplitude*amplitude_sigma)
+    period += np.random.normal(0,period*period_sigma)
+
+    # grow fiber for given amount of steps
+    for i in range(1,fiber_length):
+        # perturb fiber growth direction
+        director_perturb = amplitude*(np.sin(i*np.pi/period) + np.random.normal(mu,sigma))
+        director = director_perturb
+        if director > np.pi/2+mu:
+            director = np.pi/2 + mu
+        elif director < -np.pi/2 + mu:
+            director = -np.pi/2 + mu
+        xstep = np.cos(director)
+        ystep = np.sin(director)
+        xpos = (xpos + xstep)
+        ypos = (ypos + ystep)
+
+
+        xylist[i,1] = xpos
+        xylist[i,0] = ypos
+
+    return xylist
+
+@nb.njit()
+def smooth_fiber_core(xylist, avg_width):
+    ''' Smooths out grow_fiber_core results using a
+    moving window average of width avg_width.
+    Used for axial director calculation '''
+
+    xysmooth = np.zeros(xylist.shape)
+    iter_val = xylist.shape[0]
+    
+    for j in range(0,avg_width):
+        xysmooth[j,0] = np.mean(xylist[0:(2*j+1),0])
+        xysmooth[j,1] = np.mean(xylist[0:(2*j+1),1])
+    for j in range(avg_width,iter_val-avg_width):
+        min_idx = j-avg_width
+        max_idx = j+avg_width+1
+        xysmooth[j,0] = np.mean(xylist[min_idx:max_idx,0])
+        xysmooth[j,1] = np.mean(xylist[min_idx:max_idx,1])
+    for j in range(iter_val-avg_width,iter_val):
+        xysmooth[j,0] = np.mean(xylist[(j-avg_width):,0])
+        xysmooth[j,1] = np.mean(xylist[(j-avg_width):,1])
+
+    return xysmooth
+
+@nb.njit()
+def axial_director(xylist):
+    ''' Calculates axial director of fiber core at each point '''
+    theta = np.zeros(xylist.shape[0])
+    diff_y = np.diff(xylist[:,0].ravel())
+    diff_x = np.diff(xylist[:,1].ravel())
+    theta[:-1] = np.arctan(diff_y/diff_x)
+    theta[-1] = theta[-2]
+
+    return theta
+
+
+@nb.njit()
+def fill_loop(tuple1,fiber_orientation):
+    for i in range(len(tuple1[0])):
+        y = tuple1[0][i]
+        x = tuple1[1][i]
+        fiber_orientation[y,x] = np.nanmean(fiber_orientation[(y-1):(y+2),(x-1):(x+2)])
+        
+    return fiber_orientation
+
+@nb.njit()
+def create_disk_coords(radius):
+    """Generates a flat, disk-shaped footprint.
+    A pixel is within the neighborhood if the Euclidean distance between
+    it and the origin is no greater than radius.
+    Parameters
+    ----------
+    radius : int
+        The radius of the disk-shaped footprint.
+    Other Parameters
+    ----------------
+    dtype : data-type, optional
+        The data type of the footprint.
+    Returns
+    -------
+    footprint : ndarray
+        The footprint where elements of the neighborhood are 1 and 0 otherwise.
+    """
+    L = np.arange(-radius, radius + 1)
+    # disk_out = np.zeros(shape=(L.size,L.size),dtype=dtype)
+    disk_coords = List()
+    for j in range(L.size):
+        for i in range(L.size):
+            if (L[j]**2 + L[i]**2 <= radius**2):
+                disk_coords.append((L[j],L[i]))
+                
+    return disk_coords
+
+@nb.njit()
+def select_dilate_nb(xylist, coords, size):
+    output_array = np.zeros((size,size),dtype=np.uint8)
+    for i in range(xylist.shape[0]):
+        for val_pair in coords:
+            ycoord = int((val_pair[0]+round(xylist[i,0]))%size)
+            xcoord = int((val_pair[1]+round(xylist[i,1]))%size)
+            output_array[ycoord,xcoord] = 1
+    return output_array
+
+@nb.njit()
+def fill_nans(xylist, fiber_orientation, width, theta):
+    # fill in missing holes using fiber from disk structuring element
+    disk_coords = create_disk_coords(width)
+    fiber_center = select_dilate_nb(xylist,disk_coords,fiber_orientation.shape[0])
+    fill1 = np.nonzero((fiber_center==1) & (np.isnan(fiber_orientation)))
+
+    fiber_orientation = fill_loop(fill1,fiber_orientation)
+    
+    # get the first bit of the fiber that wasn't caught with nanmean
+    fill2_y, fill2_x = np.nonzero((fiber_center==1) & (np.isnan(fiber_orientation)))
+    for i in range(len(fill2_x)):
+        fiber_orientation[fill2_y[i],fill2_x[i]] = theta[0]
+
+    # replace nans with zeros
+    fill_nan_y, fill_nan_x = np.nonzero(np.isnan(fiber_orientation))
+    for i in range(len(fill_nan_y)):
+        fiber_orientation[fill_nan_y[i],fill_nan_x[i]] = 0
+    
+    
+    return fiber_center, fiber_orientation
+
+@nb.njit()
+def expand_loop(xylist, theta, r, fiberspace_size, fiber_orientation):
+    fiber_count = np.zeros(fiber_orientation.shape)
+    for i in range(xylist.shape[0]):
+        tmp_dx = xylist[i,1] + r*np.cos(np.pi/2+theta[i])
+        tmp_dy = xylist[i,0] + r*np.sin(np.pi/2+theta[i])
+        for j in range(len(tmp_dx)):
+            dx = round(tmp_dx[j])%fiberspace_size
+            dy = round(tmp_dy[j])%fiberspace_size
+            fiber_count[dy,dx] += 1.0
+            fiber_orientation[dy,dx] += theta[i]
+    
+    fiber_orientation /= fiber_count
+    
+    return fiber_orientation
+
+@nb.njit()
+def expand_fiber(xylist,theta,width,fiberspace_size):
+        ''' assign orientation orthogonal to fiber core out to some width '''
+        
+        # create fiber_count, fiber_orientation, and fiber_center
+        fiber_orientation = np.zeros((fiberspace_size,fiberspace_size))
+        
+        width = max(width,1.0)
+        r = np.linspace(-width,width,5*round(width))
+
+        fiber_orientation = expand_loop(xylist, theta, r, fiberspace_size, fiber_orientation)
+        
+        fiber_center, fiber_orientation = fill_nans(xylist,
+                                                    fiber_orientation,
+                                                    width,theta)
+
+        return fiber_center, fiber_orientation
+
+@nb.njit()
+def grow_fibers(fiber_number,fiber_length,director,sigma1,sigma2,fiber_width,avg_width,
+                    fiberspace_size,fiber_width_sigma=0):
+    ''' inputs-
+        fiber_number: number of fibers to grow
+        director: overall alignment direction of fibers
+        sigma1: standard deviation on the normal distribution that determines
+                each individual fibers direction
+        sigma2: standard deviation on normal distribution that perturbs an
+                invidual fibers direction as it grows
+        fiber_width: radius of fiber short axis in pixels
+        avg_width: smoothing window size
+        fiberspace_size: size of the square array
+        fiber_width_sigma: fiber width normal distribution standard deviation
+        fiber_length: number of steps to grow fiber. if None, defaults to
+                        fiberspace_size
+    '''
+    fiberspace = np.zeros((fiberspace_size,fiberspace_size),dtype=np.float64)
+    alignment_space = np.zeros((fiberspace_size,fiberspace_size),dtype=np.float64)
+
+    all_cores = List()
+    for i in prange(fiber_number):
+        mu = np.random.normal(director,sigma1)
+
+        xylist = grow_fiber_core(fiber_length,mu,sigma2,fiberspace_size)
+        all_cores.append(xylist)
+        xysmooth = smooth_fiber_core(xylist,avg_width)
+        theta = axial_director(xysmooth)
+        fiber_count, fiber_orientation = expand_fiber(xylist,theta,np.random.normal(fiber_width,fiber_width_sigma),fiberspace_size)
+        fiberspace += fiber_count
+        alignment_space += fiber_orientation
+
+    alignment_space /= fiberspace
+
+    return fiberspace, alignment_space, all_cores
+
+@nb.njit()
+def grow_sino_fibers(fiber_number,fiber_length,director,sigma1,sigma2,fiber_width,avg_width,
+                fiberspace_size,amplitude, period, fiber_width_sigma=0,amplitude_sigma=0.1, period_sigma=0.1):
+    ''' inputs-
+        fiber_number: number of fibers to grow
+        director: overall alignment direction of fibers
+        sigma1: standard deviation on the normal distribution that determines
+                each individual fibers direction
+        sigma2: standard deviation on normal distribution that perturbs an
+                invidual fibers direction as it grows
+        fiber_width: radius of fiber short axis in pixels
+        avg_width: smoothing window size
+        fiberspace_size: size of the square array
+        fiber_width_sigma: fiber width normal distribution standard deviation
+        fiber_length: number of steps to grow fiber. if None, defaults to
+                        fiberspace_size
+    '''
+    fiberspace = np.zeros((fiberspace_size,fiberspace_size),dtype=np.float64)
+    alignment_space = np.zeros((fiberspace_size,fiberspace_size),dtype=np.float64)
+
+    all_cores = List()
+    for i in prange(fiber_number):
+        mu = np.random.normal(director,sigma1)
+
+        xylist = grow_sino_fiber_core(fiber_length, mu, sigma2,
+                                        amplitude, period, fiberspace_size,
+                                        amplitude_sigma=amplitude_sigma, period_sigma=period_sigma)
+        all_cores.append(xylist)
+        xysmooth = smooth_fiber_core(xylist,avg_width)
+        theta = axial_director(xysmooth)
+        fiber_count, fiber_orientation = expand_fiber(xylist,theta,np.random.normal(fiber_width,fiber_width_sigma),fiberspace_size)
+        fiberspace += fiber_count
+        alignment_space += fiber_orientation
+
+    alignment_space /= fiberspace
+
+    return fiberspace, alignment_space, all_cores
+
+@nb.njit()
+def tangent_components(helical_period,t,theta):
+    xcomp = 1
+    ycomp = np.pi/helical_period*np.cos(t*np.pi/helical_period)
+    zcomp = np.pi/helical_period*np.sin(t*np.pi/helical_period)
+    xout = xcomp*np.cos(theta) - ycomp*np.sin(theta)
+    yout = xcomp*np.sin(theta) + ycomp*np.cos(theta)
+    return np.array([xout, yout, zcomp])
+
+@nb.njit()
+def normal_components(helical_period,t,theta):
+    xcomp = 0
+    ycomp = -(np.pi/helical_period)**2*np.sin(t*np.pi/helical_period)
+    zcomp = (np.pi/helical_period)**2*np.cos(t*np.pi/helical_period)
+    xout = xcomp*np.cos(theta) - ycomp*np.sin(theta)
+    yout = xcomp*np.sin(theta) + ycomp*np.cos(theta)
+    return np.array([xout, yout, zcomp])
+
+@nb.njit()
+def fill_loop_helical(tuple1,orientation_component):
+    for i in range(len(tuple1[0])):
+        y = tuple1[0][i]
+        x = tuple1[1][i]
+        orientation_component[y,x,0] = np.nanmean(orientation_component[(y-1):(y+2),(x-1):(x+2),0])
+        orientation_component[y,x,1] = np.nanmean(orientation_component[(y-1):(y+2),(x-1):(x+2),1])
+        orientation_component[y,x,2] = np.nanmean(orientation_component[(y-1):(y+2),(x-1):(x+2),2])
+
+        
+    return orientation_component
+
+@nb.njit()
+def fill_nans_helical(xylist, tan_comps, norm_comps, width, theta, scale, offset):
+
+    # fill in missing holes using fiber from disk structuring element
+    disk_coords = create_disk_coords(width)
+    fiber_center = select_dilate_nb(xylist,disk_coords,tan_comps.shape[0])
+    fill1 = np.nonzero((fiber_center==1) & (np.isnan(np.sum(tan_comps,axis=2))))
+
+    tan_comps = fill_loop_helical(fill1,tan_comps)
+    norm_comps = fill_loop_helical(fill1,norm_comps)
+    
+    # get the first bit of the fiber that wasn't caught with nanmean
+    fill2_y, fill2_x = np.nonzero((fiber_center == 1) & (np.isnan(tan_comps[:,:,0])))
+    for i in range(len(fill2_x)):
+        tan_comps[fill2_y[i],fill2_x[i],:] = tangent_components(scale, offset, theta[0])
+        norm_comps[fill2_y[i],fill2_x[i],:] = normal_components(scale, offset, theta[0])
+
+    # replace nans with zeros
+    fill_nan_y, fill_nan_x, fill_nan_vec = np.nonzero(np.isnan(tan_comps))
+    for i in range(len(fill_nan_y)):
+        tan_comps[fill_nan_y[i],fill_nan_x[i],fill_nan_vec[i]] = 0
+        norm_comps[fill_nan_y[i], fill_nan_x[i],fill_nan_vec[i]] = 0
+    
+    
+    return fiber_center, tan_comps, norm_comps
+
+@nb.njit()
+def expand_loop_helical(xylist, theta, r, fiberspace_size, tan_comps, norm_comps, scale, offset):
+    fiber_count = np.zeros((fiberspace_size, fiberspace_size,1))
+    for i in range(xylist.shape[0]):
+        tmp_dx = xylist[i,1] + r*np.cos(np.pi/2+theta[i])
+        tmp_dy = xylist[i,0] + r*np.sin(np.pi/2+theta[i])
+        for j in range(len(tmp_dx)):
+            dx = round(tmp_dx[j])%fiberspace_size
+            dy = round(tmp_dy[j])%fiberspace_size
+            fiber_count[dy,dx,0] += 1.0
+            # fiber_orientation[dy,dx] += theta[i]
+            tan_comps[dy,dx,:] += tangent_components(scale,i+offset,theta[i])
+            norm_comps[dy,dx,:] += normal_components(scale,i+offset,theta[i])
+    
+    tan_comps /= fiber_count
+    norm_comps /= fiber_count
+    
+    return tan_comps, norm_comps
+
+@nb.njit()
+def map_helical(xylist,theta,width,scale,
+                fiberspace_size):
+    # reset arrays
+    tan_comps = np.zeros((fiberspace_size, fiberspace_size, 3))
+    norm_comps = tan_comps.copy()
+
+    # random offset to the helical phase
+    offset = np.random.normal(0,2)
+
+    #
+    width = max(width,1.0)
+    r = np.linspace(-width,width,4*round(width))
+
+    tan_comps, norm_comps = expand_loop_helical(xylist, theta, r, 
+                                                fiberspace_size, tan_comps, 
+                                                norm_comps, scale, offset)
+
+    fiber_center, tan_comps, norm_comps = fill_nans_helical(xylist, tan_comps,
+                                                            norm_comps, width,
+                                                            theta, scale, offset)
+    return fiber_center, tan_comps, norm_comps
+
+
+@nb.njit()
+def grow_sino_helicalfibers(fiber_number,fiber_length,director,sigma1,sigma2,fiber_width,avg_width,
+                fiberspace_size,helical_scale,amplitude, period, fiber_width_sigma=0,amplitude_sigma=0.1, period_sigma=0.1):
+    ''' inputs-
+        fiber_number: number of fibers to grow
+        director: overall alignment direction of fibers
+        sigma1: standard deviation on the normal distribution that determines
+                each individual fibers direction
+        sigma2: standard deviation on normal distribution that perturbs an
+                invidual fibers direction as it grows
+        fiber_width: radius of fiber short axis in pixels
+        avg_width: smoothing window size
+        fiberspace_size: size of the square array
+        fiber_width_sigma: fiber width normal distribution standard deviation
+        fiber_length: number of steps to grow fiber. if None, defaults to
+                        fiberspace_size
+    '''
+    fiberspace = np.zeros((fiberspace_size,fiberspace_size),dtype=np.float64)
+    alignment_tan = np.zeros((fiberspace_size,fiberspace_size,3),dtype=np.float64)
+    alignment_norm = np.zeros((fiberspace_size,fiberspace_size,3),dtype=np.float64)
+
+
+    all_cores = List()
+    for i in prange(fiber_number):
+        mu = np.random.normal(director,sigma1)
+
+        xylist = grow_sino_fiber_core(fiber_length, mu, sigma2,
+                                        amplitude, period, fiberspace_size,
+                                        amplitude_sigma=amplitude_sigma, period_sigma=period_sigma)
+        all_cores.append(xylist)
+        xysmooth = smooth_fiber_core(xylist,avg_width)
+        theta = axial_director(xysmooth)
+        fiber_count, tan_comps, norm_comps = map_helical(xylist,theta,
+                                                        np.random.normal(fiber_width,fiber_width_sigma),
+                                                        helical_scale,fiberspace_size)
+        fiberspace += fiber_count
+        alignment_tan += tan_comps
+        alignment_norm += norm_comps
+    
+
+    fiberspace = np.reshape(fiberspace,(fiberspace_size,fiberspace_size,1))
+    alignment_tan /= fiberspace
+    alignment_norm /= fiberspace
+
+    fill_tan = np.nonzero(np.isnan(alignment_tan))
+    for i in range(len(fill_tan[0])):
+        alignment_tan[fill_tan[0][i],fill_tan[1][i]] = 0
+
+    fill_norm = np.nonzero(np.isnan(alignment_norm))
+    for i in range(len(fill_norm[0])):
+        alignment_tan[fill_norm[0][i],fill_norm[1][i]] = 0
+
+    # make sure magnitude of tangential and normal components are both 1
+    dmag = np.sqrt(np.sum(alignment_tan**2,axis=2))
+    d2mag = np.sqrt(np.sum(alignment_norm**2,axis=2))
+    dmag = np.reshape(dmag,(fiberspace_size,fiberspace_size,1))
+    d2mag = np.reshape(d2mag,(fiberspace_size,fiberspace_size,1))
+    alignment_tan /= dmag
+    alignment_norm /= d2mag
+    # calculate binormal vector array from cross product
+    alignment_binorm = np.cross(alignment_tan,alignment_norm)
+
+    return fiberspace, alignment_tan, alignment_norm, alignment_binorm, all_cores
 
 class fibergrowth():
 
-    def __init__(self,random_seed=None):
-        if random_seed is not None:
-            self.rng = np.random.default_rng(random_seed)
-        else:
-            self.rng = np.random.default_rng()
+    def __init__(self):
+        pass
 
-    def grow_fiber_core(self,fiber_length,mu,sigma,fiberspace_size):
-        ''' Uses a list based method to propagate a fiber with a
-        uniform distribution about an overall director
-
-        mu - overall director direction
-        sigma - standard deviation of normal distribution
-
-        TO DO: code in other distributions'''
-        xlist = []
-        ylist = []
-        init_pos = self.rng.integers(0,fiberspace_size,2)
-        xpos = init_pos[1]
-        ypos = init_pos[0]
-        ylist.append(init_pos[0])
-        xlist.append(init_pos[1])
-        # grow fiber for given amount of steps
-        for i in np.arange(0,fiber_length):
-            # perturb fiber growth direction
-            director_perturb = self.rng.normal(mu, sigma)
-            director = director_perturb
-            xstep = np.cos(director)
-            ystep = np.sin(director)
-            xpos = (xpos + xstep)
-            ypos = (ypos + ystep)
-
-
-            xlist.append(xpos)
-            ylist.append(ypos)
-
-        return xlist, ylist
-
+    
     def grow_fiber_drfield(self,fiber_length,director_field,sigma):
         ''' Uses a list based method to propagate a fiber through a
         pre-generated director field
@@ -58,7 +472,7 @@ class fibergrowth():
         # grow fiber for given amount of steps
         for i in np.arange(0,fiber_length):
             # perturb fiber growth direction
-            director_perturb = director_field[int(ypos)%ymax,int(xpos)%xmax] + self.rng.normal(0, sigma)
+            director_perturb = director_field[int(ypos)%ymax,int(xpos)%xmax] + np.random.normal(0, sigma)
             director = director_perturb
             xstep = np.cos(director)
             ystep = np.sin(director)
@@ -71,124 +485,6 @@ class fibergrowth():
 
         return xlist, ylist
 
-    def grow_sino_fiber_core(self,fiber_length,mu,sigma,amplitude,period,fiberspace_size,amplitude_sigma = 0.1, period_sigma=0.1):
-        ''' Uses a list based method to propagate a fiber with a
-        uniform distribution about an overall director
-
-        mu - overall director direction
-        sigma - standard deviation of normal distribution
-
-        TO DO: code in other distributions'''
-        xlist = []
-        ylist = []
-        init_pos = self.rng.integers(0,fiberspace_size,2)
-        xpos = init_pos[1]
-        ypos = init_pos[0]
-        ylist.append(init_pos[0])
-        xlist.append(init_pos[1])
-
-        amplitude += self.rng.normal(0,amplitude*amplitude_sigma)
-        period += self.rng.normal(0,period*period_sigma)
-
-        # grow fiber for given amount of steps
-        for i in np.arange(0,fiber_length):
-            # perturb fiber growth direction
-            director_perturb = amplitude*(np.sin(i*np.pi/period) + self.rng.normal(mu, sigma))
-            director = director_perturb
-            if director > np.pi/2+mu:
-                director = np.pi/2 + mu
-            if director < -np.pi/2 + mu:
-                director = -np.pi/2 + mu
-            xstep = np.cos(director)
-            ystep = np.sin(director)
-            xpos = (xpos + xstep)
-            ypos = (ypos + ystep)
-
-
-            xlist.append(xpos)
-            ylist.append(ypos)
-
-        return xlist, ylist
-
-    def smooth_fiber_core(self,xlist, ylist, avg_width):
-        ''' Smooths out grow_fiber_core results using a
-        moving window average of width avg_width.
-        Used for axial director calculation '''
-
-        xsmooth = []
-        ysmooth = []
-
-        for j in np.arange(0,avg_width):
-            xsmooth.append(np.mean(xlist[0:(2*j+1)]))
-            ysmooth.append(np.mean(ylist[0:(2*j+1)]))
-        for j in np.arange(avg_width,len(xlist)-avg_width):
-            min_idx = j-avg_width
-            max_idx = j+avg_width+1
-            xsmooth.append(np.mean(xlist[min_idx:max_idx]))
-            ysmooth.append(np.mean(ylist[min_idx:max_idx]))
-        for j in np.arange(len(xlist)-avg_width,len(xlist)):
-            xsmooth.append(np.mean(xlist[(j-avg_width):]))
-            ysmooth.append(np.mean(ylist[(j-avg_width):]))
-
-        return xsmooth, ysmooth
-
-    def axial_director(self, xlist, ylist):
-        ''' Calculates axial director of fiber core at each point '''
-        diff_y = np.diff(ylist)
-        diff_x = np.diff(xlist)
-        theta = np.arctan(diff_y/diff_x)
-        theta = np.concatenate((theta,theta[-1]),axis=None)
-
-        return theta
-
-    def fill_nans(self,fiber_center,fiber_count,fiber_orientation,width,theta):
-        # fill in missing holes using fiber from disk structuring element
-        fiber_center = dilation(fiber_center,disk(width))
-        fill_idx = (fiber_center == 1) & (np.isnan(fiber_orientation))
-        fill2 = np.where(fill_idx == True)
-
-        for y,x in zip(fill2[0],fill2[1]):
-            fiber_orientation[y,x] = np.nanmean(fiber_orientation[(y-1):(y+2),(x-1):(x+2)])
-
-        # get the first bit of the fiber that wasn't caught with nanmean
-        fill_idx = (fiber_center == 1) & (np.isnan(fiber_orientation))
-        fill2 = np.where(fill_idx == True)
-        fiber_orientation[fill2[0].astype(int),fill2[1].astype(int)] = theta[0]
-        fiber_orientation[np.isnan(fiber_orientation)] = 0
-
-        # go back and make sure fiber_count matches
-        fiber_count[fiber_orientation != 0] = 1
-        return fiber_count, fiber_orientation
-
-    def expand_fiber(self,xlist,ylist,theta,width,fiberspace,fiber_count,
-                                                            fiber_orientation,
-                                                            fiber_center):
-        ''' assign orientation orthogonal to fiber core out to some width '''
-
-        # zero out fiber_count, fiber_orientation, and fiber_center
-        fiber_count[:] = 0
-        fiber_orientation[:] = 0
-        fiber_center[:] = 0
-        width = max(width,1)
-        r = np.linspace(-width,width,4*round(width))
-
-        for i, (x,y) in enumerate(zip(xlist,ylist)):
-            dx = np.round(x + r*np.cos(np.pi/2+theta[i]))%fiberspace.shape[1]
-            dy = np.round(y + r*np.sin(np.pi/2+theta[i]))%fiberspace.shape[0]
-            fiber_count[dy.astype(int),dx.astype(int)] += 1
-            fiber_orientation[dy.astype(int),dx.astype(int)] += theta[i]
-            centerx = np.round(x)%fiberspace.shape[1]
-            centery = np.round(y)%fiberspace.shape[0]
-            fiber_center[centery.astype(int),centerx.astype(int)] = 1
-
-        fiber_orientation /= fiber_count
-
-        fiber_count, fiber_orientation = self.fill_nans(fiber_center,
-                                                        fiber_count,
-                                                        fiber_orientation,
-                                                        width,theta)
-
-        return fiber_count, fiber_orientation
 
     def grow_fibers(self,fiber_number,director,sigma1,sigma2,fiber_width,avg_width,
                     fiberspace_size,fiber_width_sigma=0, fiber_length=None):
@@ -221,7 +517,7 @@ class fibergrowth():
 
 
         for i in range(fiber_number):
-            mu = self.rng.normal(director,sigma1)
+            mu = np.random.normal(director,sigma1)
 
             xlist, ylist = self.grow_fiber_core(fiber_length,mu,sigma2,
                             fiberspace_size)
@@ -231,7 +527,7 @@ class fibergrowth():
             fiber_count, fiber_orientation = self.expand_fiber(xlist,
                                                                ylist,
                                                                theta,
-                                                               self.rng.normal(fiber_width,fiber_width_sigma),
+                                                               np.random.normal(fiber_width,fiber_width_sigma),
                                                                fiberspace,
                                                                fiber_count,
                                                                fiber_orientation,
@@ -282,7 +578,7 @@ class fibergrowth():
             fiber_count, fiber_orientation = self.expand_fiber(xlist,
                                                                ylist,
                                                                theta,
-                                                               self.rng.normal(fiber_width,fiber_width_sigma),
+                                                               np.random.normal(fiber_width,fiber_width_sigma),
                                                                fiberspace,
                                                                fiber_count,
                                                                fiber_orientation,
@@ -326,7 +622,7 @@ class fibergrowth():
 
 
         for i in range(fiber_number):
-            mu = self.rng.normal(director,sigma1)
+            mu = np.random.normal(director,sigma1)
 
             xlist, ylist = self.grow_sino_fiber_core(fiber_length,mu,sigma2,
                             amplitude, period, fiberspace_size)
@@ -336,7 +632,7 @@ class fibergrowth():
             fiber_count, fiber_orientation = self.expand_fiber(xlist,
                                                                ylist,
                                                                theta,
-                                                               self.rng.normal(fiber_width,fiber_width_sigma),
+                                                               np.random.normal(fiber_width,fiber_width_sigma),
                                                                fiberspace,
                                                                fiber_count,
                                                                fiber_orientation,
@@ -365,7 +661,7 @@ class fibergrowth():
         return xout, yout, zcomp
 
     def fill_nans_helical(self, fiber_center,tan_comps,norm_comps,width,theta,scale):
-        width = max(1,width)
+        
         fiber_center=dilation(fiber_center,disk(width))
 
         fill_idx = (fiber_center == 1) & (np.isnan(np.sum(tan_comps,axis=2)))
@@ -401,9 +697,10 @@ class fibergrowth():
         fiber_center[:] = 0
 
         # random offset to the helical phase
-        offset = self.rng.normal(0,2)
+        offset = np.random.normal(0,2)
 
         #
+        width = max(width,1.0)
         r = np.linspace(-width,width,4*round(width))
 
         for i, (x,y) in enumerate(zip(xlist,ylist)):
@@ -463,7 +760,7 @@ class fibergrowth():
             fiber_length = fiberspace_size
 
         for i in range(fiber_number):
-            mu = self.rng.normal(director,sigma1)
+            mu = np.random.normal(director,sigma1)
 
             xlist, ylist = self.grow_fiber_core(fiber_length,mu,sigma2,
                             fiberspace_size)
@@ -473,7 +770,7 @@ class fibergrowth():
             fiber_count, tan_comps, norm_comps = self.map_helical(xlist,
                                                                ylist,
                                                                theta,
-                                                               self.rng.normal(fiber_width,fiber_width_sigma),
+                                                               np.random.normal(fiber_width,fiber_width_sigma),
                                                                helical_scale,
                                                                fiberspace,
                                                                fiber_count,
@@ -533,7 +830,7 @@ class fibergrowth():
             fiber_length = fiberspace_size
 
         for i in range(fiber_number):
-            mu = self.rng.normal(director,sigma1)
+            mu = np.random.normal(director,sigma1)
 
             xlist, ylist = self.grow_sino_fiber_core(fiber_length,mu,sigma2,amplitude, period,
                             fiberspace_size)
@@ -543,7 +840,7 @@ class fibergrowth():
             fiber_count, tan_comps, norm_comps = self.map_helical(xlist,
                                                                ylist,
                                                                theta,
-                                                               self.rng.normal(fiber_width,fiber_width_sigma),
+                                                               np.random.normal(fiber_width,fiber_width_sigma),
                                                                helical_scale,
                                                                fiberspace,
                                                                fiber_count,
