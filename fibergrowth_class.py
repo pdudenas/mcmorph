@@ -285,6 +285,169 @@ def grow_sino_fibers(fiber_number,fiber_length,director,sigma1,sigma2,fiber_widt
 
     return fiberspace, alignment_space, all_cores
 
+@nb.njit()
+def tangent_components(helical_period,t,theta):
+    xcomp = 1
+    ycomp = np.pi/helical_period*np.cos(t*np.pi/helical_period)
+    zcomp = np.pi/helical_period*np.sin(t*np.pi/helical_period)
+    xout = xcomp*np.cos(theta) - ycomp*np.sin(theta)
+    yout = xcomp*np.sin(theta) + ycomp*np.cos(theta)
+    return np.array([xout, yout, zcomp])
+
+@nb.njit()
+def normal_components(helical_period,t,theta):
+    xcomp = 0
+    ycomp = -(np.pi/helical_period)**2*np.sin(t*np.pi/helical_period)
+    zcomp = (np.pi/helical_period)**2*np.cos(t*np.pi/helical_period)
+    xout = xcomp*np.cos(theta) - ycomp*np.sin(theta)
+    yout = xcomp*np.sin(theta) + ycomp*np.cos(theta)
+    return np.array([xout, yout, zcomp])
+
+@nb.njit()
+def fill_loop_helical(tuple1,orientation_component):
+    for i in range(len(tuple1[0])):
+        y = tuple1[0][i]
+        x = tuple1[1][i]
+        orientation_component[y,x,0] = np.nanmean(orientation_component[(y-1):(y+2),(x-1):(x+2),0])
+        orientation_component[y,x,1] = np.nanmean(orientation_component[(y-1):(y+2),(x-1):(x+2),1])
+        orientation_component[y,x,2] = np.nanmean(orientation_component[(y-1):(y+2),(x-1):(x+2),2])
+
+        
+    return orientation_component
+
+@nb.njit()
+def fill_nans_helical(xylist, tan_comps, norm_comps, width, theta, scale, offset):
+
+    # fill in missing holes using fiber from disk structuring element
+    disk_coords = create_disk_coords(width)
+    fiber_center = select_dilate_nb(xylist,disk_coords,tan_comps.shape[0])
+    fill1 = np.nonzero((fiber_center==1) & (np.isnan(np.sum(tan_comps,axis=2))))
+
+    tan_comps = fill_loop_helical(fill1,tan_comps)
+    norm_comps = fill_loop_helical(fill1,norm_comps)
+    
+    # get the first bit of the fiber that wasn't caught with nanmean
+    fill2_y, fill2_x = np.nonzero((fiber_center == 1) & (np.isnan(tan_comps[:,:,0])))
+    for i in range(len(fill2_x)):
+        tan_comps[fill2_y[i],fill2_x[i],:] = tangent_components(scale, offset, theta[0])
+        norm_comps[fill2_y[i],fill2_x[i],:] = normal_components(scale, offset, theta[0])
+
+    # replace nans with zeros
+    fill_nan_y, fill_nan_x, fill_nan_vec = np.nonzero(np.isnan(tan_comps))
+    for i in range(len(fill_nan_y)):
+        tan_comps[fill_nan_y[i],fill_nan_x[i],fill_nan_vec[i]] = 0
+        norm_comps[fill_nan_y[i], fill_nan_x[i],fill_nan_vec[i]] = 0
+    
+    
+    return fiber_center, tan_comps, norm_comps
+
+@nb.njit()
+def expand_loop_helical(xylist, theta, r, fiberspace_size, tan_comps, norm_comps, scale, offset):
+    fiber_count = np.zeros((fiberspace_size, fiberspace_size,1))
+    for i in range(xylist.shape[0]):
+        tmp_dx = xylist[i,1] + r*np.cos(np.pi/2+theta[i])
+        tmp_dy = xylist[i,0] + r*np.sin(np.pi/2+theta[i])
+        for j in range(len(tmp_dx)):
+            dx = round(tmp_dx[j])%fiberspace_size
+            dy = round(tmp_dy[j])%fiberspace_size
+            fiber_count[dy,dx,0] += 1.0
+            # fiber_orientation[dy,dx] += theta[i]
+            tan_comps[dy,dx,:] += tangent_components(scale,i+offset,theta[i])
+            norm_comps[dy,dx,:] += normal_components(scale,i+offset,theta[i])
+    
+    tan_comps /= fiber_count
+    norm_comps /= fiber_count
+    
+    return tan_comps, norm_comps
+
+@nb.njit()
+def map_helical(xylist,theta,width,scale,
+                fiberspace_size):
+    # reset arrays
+    tan_comps = np.zeros((fiberspace_size, fiberspace_size, 3))
+    norm_comps = tan_comps.copy()
+
+    # random offset to the helical phase
+    offset = np.random.normal(0,2)
+
+    #
+    width = max(width,1.0)
+    r = np.linspace(-width,width,4*round(width))
+
+    tan_comps, norm_comps = expand_loop_helical(xylist, theta, r, 
+                                                fiberspace_size, tan_comps, 
+                                                norm_comps, scale, offset)
+
+    fiber_center, tan_comps, norm_comps = fill_nans_helical(xylist, tan_comps,
+                                                            norm_comps, width,
+                                                            theta, scale, offset)
+    return fiber_center, tan_comps, norm_comps
+
+
+@nb.njit()
+def grow_sino_helicalfibers(fiber_number,fiber_length,director,sigma1,sigma2,fiber_width,avg_width,
+                fiberspace_size,helical_scale,amplitude, period, fiber_width_sigma=0,amplitude_sigma=0.1, period_sigma=0.1):
+    ''' inputs-
+        fiber_number: number of fibers to grow
+        director: overall alignment direction of fibers
+        sigma1: standard deviation on the normal distribution that determines
+                each individual fibers direction
+        sigma2: standard deviation on normal distribution that perturbs an
+                invidual fibers direction as it grows
+        fiber_width: radius of fiber short axis in pixels
+        avg_width: smoothing window size
+        fiberspace_size: size of the square array
+        fiber_width_sigma: fiber width normal distribution standard deviation
+        fiber_length: number of steps to grow fiber. if None, defaults to
+                        fiberspace_size
+    '''
+    fiberspace = np.zeros((fiberspace_size,fiberspace_size),dtype=np.float64)
+    alignment_tan = np.zeros((fiberspace_size,fiberspace_size,3),dtype=np.float64)
+    alignment_norm = np.zeros((fiberspace_size,fiberspace_size,3),dtype=np.float64)
+
+
+    all_cores = List()
+    for i in prange(fiber_number):
+        mu = np.random.normal(director,sigma1)
+
+        xylist = grow_sino_fiber_core(fiber_length, mu, sigma2,
+                                        amplitude, period, fiberspace_size,
+                                        amplitude_sigma=amplitude_sigma, period_sigma=period_sigma)
+        all_cores.append(xylist)
+        xysmooth = smooth_fiber_core(xylist,avg_width)
+        theta = axial_director(xysmooth)
+        fiber_count, tan_comps, norm_comps = map_helical(xylist,theta,
+                                                        np.random.normal(fiber_width,fiber_width_sigma),
+                                                        helical_scale,fiberspace_size)
+        fiberspace += fiber_count
+        alignment_tan += tan_comps
+        alignment_norm += norm_comps
+    
+
+    fiberspace = np.reshape(fiberspace,(fiberspace_size,fiberspace_size,1))
+    alignment_tan /= fiberspace
+    alignment_norm /= fiberspace
+
+    fill_tan = np.nonzero(np.isnan(alignment_tan))
+    for i in range(len(fill_tan[0])):
+        alignment_tan[fill_tan[0][i],fill_tan[1][i]] = 0
+
+    fill_norm = np.nonzero(np.isnan(alignment_norm))
+    for i in range(len(fill_norm[0])):
+        alignment_tan[fill_norm[0][i],fill_norm[1][i]] = 0
+
+    # make sure magnitude of tangential and normal components are both 1
+    dmag = np.sqrt(np.sum(alignment_tan**2,axis=2))
+    d2mag = np.sqrt(np.sum(alignment_norm**2,axis=2))
+    dmag = np.reshape(dmag,(fiberspace_size,fiberspace_size,1))
+    d2mag = np.reshape(d2mag,(fiberspace_size,fiberspace_size,1))
+    alignment_tan /= dmag
+    alignment_norm /= d2mag
+    # calculate binormal vector array from cross product
+    alignment_binorm = np.cross(alignment_tan,alignment_norm)
+
+    return fiberspace, alignment_tan, alignment_norm, alignment_binorm, all_cores
+
 class fibergrowth():
 
     def __init__(self):
@@ -498,7 +661,7 @@ class fibergrowth():
         return xout, yout, zcomp
 
     def fill_nans_helical(self, fiber_center,tan_comps,norm_comps,width,theta,scale):
-        width = max(1,width)
+        
         fiber_center=dilation(fiber_center,disk(width))
 
         fill_idx = (fiber_center == 1) & (np.isnan(np.sum(tan_comps,axis=2)))
@@ -537,6 +700,7 @@ class fibergrowth():
         offset = np.random.normal(0,2)
 
         #
+        width = max(width,1.0)
         r = np.linspace(-width,width,4*round(width))
 
         for i, (x,y) in enumerate(zip(xlist,ylist)):
