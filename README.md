@@ -1,5 +1,5 @@
-# STEMtranslator
-Set of tools to translate STEM data into Cy-RSoXS compatible format. The growth classes provide functionality to generate syntheic morphologies
+# MCMorph
+Collection of Monte Carlo-based algorithms for procedural morphology generation. Also includes some legacy functionality to reduce 4DSTEM and HRTEM data.
 
 Current functionality
 1. Translate semi-reduced 4DSTEM & HRTREM data (I vs. q and chi)
